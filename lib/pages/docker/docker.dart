@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:dsm_helper/pages/docker/detail.dart';
+import 'package:dsm_helper/pages/docker/project_detail.dart';
 import 'package:dsm_helper/util/function.dart';
 import 'package:dsm_helper/util/log.dart';
 import 'package:dsm_helper/widgets/bubble_tab_indicator.dart';
@@ -26,11 +29,17 @@ class _DockerState extends State<Docker> with SingleTickerProviderStateMixin {
   Map utilization;
   bool containerLoading = true;
   bool imageLoading = true;
+  List projects = [];
+  bool projectLoading = true;
+  Map<String, bool> projectPowerLoading = {};
+  bool registryLoading = true;
   @override
   void initState() {
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
     getContainer();
+    getProjects();
     getImage();
+    getRegistry();
     super.initState();
   }
 
@@ -105,6 +114,213 @@ class _DockerState extends State<Docker> with SingleTickerProviderStateMixin {
         }
       });
     }
+  }
+
+  getProjects() async {
+    var res = await Api.dockerProjectList();
+    setState(() {
+      projectLoading = false;
+    });
+    if (res != null && res['success'] == true) {
+      List list = [];
+      var data = res['data'];
+      if (data is Map) {
+        data.forEach((k, v) {
+          if (v is Map && v['id'] != null) {
+            list.add(v);
+          }
+        });
+      } else if (data is List) {
+        list = data;
+      }
+      list.sort((a, b) => (a['name'] ?? '').toString().compareTo((b['name'] ?? '').toString()));
+      setState(() {
+        projects = list;
+      });
+    }
+  }
+
+  projectAction(project, String action) async {
+    var id = project['id'];
+    setState(() {
+      projectPowerLoading[id] = true;
+    });
+    try {
+      var res = await Api.dockerProjectAction(id, action);
+      if (res is Map && res['success'] == false) {
+        var code;
+        try {
+          code = res['error']['code'];
+        } catch (_) {}
+        Util.toast("操作失败" + (code == null ? "" : "，代码：" + code.toString()));
+      } else {
+        Util.toast("已提交");
+        await Future.delayed(Duration(seconds: 2));
+        getProjects();
+      }
+    } catch (e) {
+      Util.toast("操作异常：" + e.toString());
+    }
+    if (mounted) {
+      setState(() {
+        projectPowerLoading[id] = false;
+      });
+    }
+  }
+
+  Widget _buildProjectItem(project) {
+    var id = project['id'];
+    var status = (project['status'] ?? '').toString();
+    var services = project['services'];
+    int serviceCount = services is List ? services.length : ((project['containerIds'] is List) ? project['containerIds'].length : 0);
+    if (projectPowerLoading[id] == null) {
+      projectPowerLoading[id] = false;
+    }
+    return GestureDetector(
+      onTap: () {
+        Navigator.of(context)
+            .push(CupertinoPageRoute(
+                builder: (context) {
+                  return ProjectDetail(project);
+                },
+                settings: RouteSettings(name: "docker_project_detail")))
+            .then((_) {
+          getProjects();
+        });
+      },
+      child: NeuCard(
+        curveType: CurveType.flat,
+        decoration: NeumorphicDecoration(
+          color: Theme.of(context).scaffoldBackgroundColor,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        bevel: 20,
+        margin: EdgeInsets.only(bottom: 20),
+        child: Padding(
+          padding: EdgeInsets.all(20),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            (project['name'] ?? '').toString(),
+                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        SizedBox(width: 10),
+                        status == "RUNNING"
+                            ? Label("运行中", Colors.green)
+                            : status == "STOPPED"
+                                ? Label("已停止", Colors.red)
+                                : Label(status, Colors.orange),
+                      ],
+                    ),
+                    SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            (project['path'] ?? '').toString(),
+                            style: TextStyle(fontSize: 12, color: Colors.grey),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        SizedBox(width: 10),
+                        Text("服务：" + serviceCount.toString(), style: TextStyle(fontSize: 12, color: Colors.grey)),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(width: 16),
+              GestureDetector(
+                onTap: () {
+                  showCupertinoModalPopup(
+                    context: context,
+                    builder: (context) {
+                      return Material(
+                        color: Colors.transparent,
+                        child: NeuCard(
+                          width: double.infinity,
+                          padding: EdgeInsets.all(22),
+                          bevel: 5,
+                          curveType: CurveType.emboss,
+                          decoration: NeumorphicDecoration(color: Theme.of(context).scaffoldBackgroundColor, borderRadius: BorderRadius.vertical(top: Radius.circular(22))),
+                          child: SafeArea(
+                            top: false,
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: <Widget>[
+                                Text("选择操作", style: TextStyle(fontSize: 20, fontWeight: FontWeight.w500)),
+                                SizedBox(height: 12),
+                                if (status != "RUNNING")
+                                  NeuButton(
+                                    onPressed: () {
+                                      Navigator.of(context).pop();
+                                      projectAction(project, "start");
+                                    },
+                                    decoration: NeumorphicDecoration(
+                                      color: Theme.of(context).scaffoldBackgroundColor,
+                                      borderRadius: BorderRadius.circular(25),
+                                    ),
+                                    bevel: 5,
+                                    padding: EdgeInsets.symmetric(vertical: 10),
+                                    child: Text("启动", style: TextStyle(fontSize: 18)),
+                                  ),
+                                if (status == "RUNNING")
+                                  NeuButton(
+                                    onPressed: () {
+                                      Navigator.of(context).pop();
+                                      projectAction(project, "stop");
+                                    },
+                                    decoration: NeumorphicDecoration(
+                                      color: Theme.of(context).scaffoldBackgroundColor,
+                                      borderRadius: BorderRadius.circular(25),
+                                    ),
+                                    bevel: 5,
+                                    padding: EdgeInsets.symmetric(vertical: 10),
+                                    child: Text("停止", style: TextStyle(fontSize: 18, color: Colors.redAccent)),
+                                  ),
+                                SizedBox(height: 8),
+                                Padding(
+                                  padding: EdgeInsets.only(top: 4),
+                                  child: Text("构建 / 清除 / 删除请在项目详情页操作", style: TextStyle(fontSize: 12, color: Colors.grey)),
+                                ),
+                                SizedBox(height: 8),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  );
+                },
+                child: NeuCard(
+                  padding: EdgeInsets.all(10),
+                  decoration: NeumorphicDecoration(
+                    color: Theme.of(context).scaffoldBackgroundColor,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  curveType: status == "RUNNING" ? CurveType.emboss : CurveType.flat,
+                  bevel: 20,
+                  child: projectPowerLoading[id]
+                      ? CupertinoActivityIndicator()
+                      : Image.asset("assets/icons/shutdown.png", width: 20),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   power(container, String action, {bool preserveProfile}) async {
@@ -610,6 +826,150 @@ class _DockerState extends State<Docker> with SingleTickerProviderStateMixin {
     );
   }
 
+  getRegistry() async {
+    var res = await Api.dockerRegistryInfo();
+    setState(() {
+      registryLoading = false;
+    });
+    if (res != null && res['success'] == true) {
+      var data = res['data'];
+      List list = [];
+      if (data is Map && data['registries'] is List) {
+        list = List.from(data['registries']);
+      }
+      setState(() {
+        registries = list;
+      });
+    }
+  }
+
+  registryAction(String action, {String name, String url, String username, String password}) async {
+    Map res;
+    try {
+      if (action == "create") {
+        res = await Api.dockerRegistryCreate(name, url, username: username, password: password);
+      } else if (action == "delete") {
+        res = await Api.dockerRegistryDelete(name);
+      } else if (action == "using") {
+        res = await Api.dockerRegistryUsing(name);
+      }
+    } catch (e) {
+      Util.toast("操作异常：" + e.toString());
+      return;
+    }
+    if (res != null && res['success'] == true) {
+      Util.toast("操作成功");
+      getRegistry();
+    } else {
+      var code;
+      try {
+        code = res['error']['code'];
+      } catch (_) {}
+      Util.toast("操作失败" + (code == null ? "" : "，代码：" + code.toString()));
+    }
+  }
+
+  Widget _buildRegistryItem(registry) {
+    var name = (registry['name'] ?? '').toString();
+    var url = (registry['url'] ?? '').toString();
+    var isUsing = registry['using'] == true || registry['is_using'] == true || registry['default'] == true;
+    return NeuCard(
+      curveType: CurveType.flat,
+      decoration: NeumorphicDecoration(
+        color: Theme.of(context).scaffoldBackgroundColor,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      bevel: 20,
+      margin: EdgeInsets.only(bottom: 20),
+      child: Padding(
+        padding: EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(name, style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis),
+                ),
+                if (isUsing) Label("默认", Colors.blue),
+              ],
+            ),
+            SizedBox(height: 8),
+            Text(url, style: TextStyle(fontSize: 12, color: Colors.grey)),
+            SizedBox(height: 12),
+            Row(
+              children: [
+                if (!isUsing) ...[
+                  Expanded(
+                    child: NeuButton(
+                      onPressed: () => registryAction("using", name: name, url: url),
+                      decoration: NeumorphicDecoration(color: Theme.of(context).scaffoldBackgroundColor, borderRadius: BorderRadius.circular(25)),
+                      bevel: 5,
+                      padding: EdgeInsets.symmetric(vertical: 8),
+                      child: Text("设为默认", textAlign: TextAlign.center, style: TextStyle(fontSize: 14)),
+                    ),
+                  ),
+                  SizedBox(width: 12),
+                ],
+                Expanded(
+                  child: NeuButton(
+                    onPressed: () => registryAction("delete", name: name, url: url),
+                    decoration: NeumorphicDecoration(color: Theme.of(context).scaffoldBackgroundColor, borderRadius: BorderRadius.circular(25)),
+                    bevel: 5,
+                    padding: EdgeInsets.symmetric(vertical: 8),
+                    child: Text("删除", textAlign: TextAlign.center, style: TextStyle(fontSize: 14, color: Colors.redAccent)),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showAddRegistry() {
+    var nameCtrl = TextEditingController();
+    var urlCtrl = TextEditingController();
+    var userCtrl = TextEditingController();
+    var passCtrl = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          title: Text("添加注册表"),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(controller: nameCtrl, decoration: InputDecoration(labelText: "名称")),
+                TextField(controller: urlCtrl, decoration: InputDecoration(labelText: "地址 URL")),
+                TextField(controller: userCtrl, decoration: InputDecoration(labelText: "用户名(可选)")),
+                TextField(controller: passCtrl, decoration: InputDecoration(labelText: "密码(可选)"), obscureText: true),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: Text("取消")),
+            TextButton(
+              onPressed: () {
+                var n = nameCtrl.text.trim();
+                var u = urlCtrl.text.trim();
+                if (n.isEmpty || u.isEmpty) {
+                  Util.toast("名称和地址不能为空");
+                  return;
+                }
+                Navigator.pop(ctx);
+                registryAction("create", name: n, url: u, username: userCtrl.text.trim(), password: passCtrl.text.trim());
+              },
+              child: Text("添加"),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -641,6 +1001,10 @@ class _DockerState extends State<Docker> with SingleTickerProviderStateMixin {
               tabs: [
                 Padding(
                   padding: EdgeInsets.symmetric(vertical: 10, horizontal: 5),
+                  child: Text("项目"),
+                ),
+                Padding(
+                  padding: EdgeInsets.symmetric(vertical: 10, horizontal: 5),
                   child: Text("容器"),
                 ),
                 Padding(
@@ -658,6 +1022,33 @@ class _DockerState extends State<Docker> with SingleTickerProviderStateMixin {
             child: TabBarView(
               controller: _tabController,
               children: [
+                projectLoading
+                    ? Center(
+                        child: NeuCard(
+                          padding: EdgeInsets.all(50),
+                          curveType: CurveType.flat,
+                          decoration: NeumorphicDecoration(
+                            color: Theme.of(context).scaffoldBackgroundColor,
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          bevel: 20,
+                          child: CupertinoActivityIndicator(radius: 14),
+                        ),
+                      )
+                    : ListView(
+                        padding: EdgeInsets.all(20),
+                        children: [
+                          if (projects.isEmpty)
+                            Padding(
+                              padding: EdgeInsets.symmetric(vertical: 40),
+                              child: Center(
+                                child: Text("暂无项目", style: TextStyle(color: Colors.grey)),
+                              ),
+                            )
+                          else
+                            ...projects.map(_buildProjectItem).toList(),
+                        ],
+                      ),
                 containerLoading
                     ? Center(
                         child: NeuCard(
@@ -819,9 +1210,40 @@ class _DockerState extends State<Docker> with SingleTickerProviderStateMixin {
                           );
                         },
                         itemCount: images.length),
-                Center(
-                  child: Text("开发中"),
-                ),
+                registryLoading
+                    ? Center(child: CupertinoActivityIndicator())
+                    : ListView(
+                        padding: EdgeInsets.all(20),
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text("注册表", style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+                              ),
+                              NeuButton(
+                                onPressed: _showAddRegistry,
+                                decoration: NeumorphicDecoration(
+                                  color: Theme.of(context).scaffoldBackgroundColor,
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                bevel: 5,
+                                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                child: Text("添加"),
+                              ),
+                            ],
+                          ),
+                          SizedBox(height: 16),
+                          if (registries.isEmpty)
+                            Padding(
+                              padding: EdgeInsets.symmetric(vertical: 40),
+                              child: Center(
+                                child: Text("暂无注册表", style: TextStyle(color: Colors.grey)),
+                              ),
+                            )
+                          else
+                            ...registries.map(_buildRegistryItem).toList(),
+                        ],
+                      ),
               ],
             ),
           ),

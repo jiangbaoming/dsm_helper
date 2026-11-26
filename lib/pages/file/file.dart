@@ -1650,14 +1650,18 @@ class FilesState extends State<Files> {
             }));
             break;
           default:
-            AndroidIntent intent = AndroidIntent(
-              action: 'action_view',
-              data: Util.baseUrl + "/fbdownload/${file['name']}?dlink=%22${Util.utf8Encode(file['path'])}%22&_sid=%22${Util.sid}%22&mode=open",
-              arguments: {},
-              // type: "application/vnd.ms-powerpoint|application/vnd.openxmlformats-officedocument.presentationml.presentation",
-            );
-            await intent.launch();
-          // Util.toast("暂不支持打开此类型文件");
+            String fname = (file['name'] ?? '').toString();
+            // 无扩展名，或点开头的隐藏文本文件(如 .gitignore/.env)：默认按文本打开
+            if (fname.lastIndexOf('.') <= 0) {
+              openPlainFile(file);
+            } else {
+              AndroidIntent intent = AndroidIntent(
+                action: 'action_view',
+                data: Util.baseUrl + "/fbdownload/${file['name']}?dlink=%22${Util.utf8Encode(file['path'])}%22&_sid=%22${Util.sid}%22&mode=open",
+                arguments: {},
+              );
+              await intent.launch();
+            }
         }
       }
     }
@@ -1791,6 +1795,34 @@ class FilesState extends State<Files> {
                                   ),
                                   Text(
                                     "下载",
+                                    style: TextStyle(fontSize: 12),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          Container(
+                            constraints: BoxConstraints(maxWidth: 112),
+                            width: (MediaQuery.of(context).size.width - 100) / 4,
+                            child: NeuButton(
+                              onPressed: () async {
+                                Navigator.of(context).pop();
+                                openPlainFile(file);
+                              },
+                              decoration: NeumorphicDecoration(
+                                color: Theme.of(context).scaffoldBackgroundColor,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              bevel: 20,
+                              padding: EdgeInsets.symmetric(vertical: 10),
+                              child: Column(
+                                children: [
+                                  Image.asset(
+                                    "assets/icons/edit.png",
+                                    width: 30,
+                                  ),
+                                  Text(
+                                    "以文本打开",
                                     style: TextStyle(fontSize: 12),
                                   ),
                                 ],

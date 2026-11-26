@@ -1345,6 +1345,123 @@ class Api {
     return await Util.post("entry.cgi", data: data);
   }
 
+  /// 容器管理器 - 项目(compose)列表
+  static Future<Map> dockerProjectList() async {
+    var data = {
+      "api": "SYNO.Docker.Project",
+      "method": "list",
+      "version": 1,
+      "_sid": Util.sid,
+    };
+    return await Util.post("entry.cgi", data: data);
+  }
+
+  /// 容器管理器 - 项目详情（含 compose 原文 content）
+  static Future<Map> dockerProjectGet(String id) async {
+    var data = {
+      "api": "SYNO.Docker.Project",
+      "method": "get",
+      "id": '"$id"',
+      "version": 1,
+      "_sid": Util.sid,
+    };
+    return await Util.post("entry.cgi", data: data);
+  }
+
+  /// 容器管理器 - 项目操作：start / stop / delete
+  static Future<Map> dockerProjectAction(String id, String action, {bool preserveContent}) async {
+    var data = {
+      "api": "SYNO.Docker.Project",
+      "method": action,
+      "id": '"$id"',
+      "version": 1,
+      "_sid": Util.sid,
+    };
+    if (action == "delete") {
+      data["preserve_content"] = preserveContent ?? true;
+    }
+    return await Util.post("entry.cgi", data: data);
+  }
+
+  /// 容器管理器 - 更新项目(compose YAML)
+  static Future<Map> dockerProjectUpdate(String id, String content) async {
+    var data = {
+      "api": "SYNO.Docker.Project",
+      "method": "update",
+      "id": '"$id"',
+      "content": content,
+      "version": 1,
+      "_sid": Util.sid,
+    };
+    return await Util.post("entry.cgi", data: data);
+  }
+
+  /// 容器管理器 - 获取全部日志（不按日期拆分，倒序）
+  static Future<Map> dockerLogAll(String name, {int limit = 1000}) async {
+    var data = {
+      "api": 'SYNO.Docker.Container.Log',
+      "method": "get",
+      "name": '"$name"',
+      "sort_dir": '"DESC"',
+      "limit": limit,
+      "offset": 0,
+      "version": 1,
+      "_sid": Util.sid,
+    };
+    return await Util.post("entry.cgi", data: data);
+  }
+
+  /// 容器管理器 - 注册表列表
+  static Future<Map> dockerRegistryInfo() async {
+    var data = {
+      "api": "SYNO.Docker.Registry",
+      "method": "get",
+      "version": 1,
+      "_sid": Util.sid,
+    };
+    return await Util.post("entry.cgi", data: data);
+  }
+
+  /// 容器管理器 - 新增注册表
+  static Future<Map> dockerRegistryCreate(String name, String url, {String username, String password, bool enableTrustSsc = false}) async {
+    var data = {
+      "api": "SYNO.Docker.Registry",
+      "method": "create",
+      "version": 1,
+      "name": '"$name"',
+      "url": '"$url"',
+      "enable_trust_SSC": enableTrustSsc,
+      "_sid": Util.sid,
+    };
+    if (username != null && username.isNotEmpty) data["username"] = '"$username"';
+    if (password != null && password.isNotEmpty) data["password"] = '"$password"';
+    return await Util.post("entry.cgi", data: data);
+  }
+
+  /// 容器管理器 - 删除注册表
+  static Future<Map> dockerRegistryDelete(String name) async {
+    var data = {
+      "api": "SYNO.Docker.Registry",
+      "method": "delete",
+      "version": 1,
+      "name": '"$name"',
+      "_sid": Util.sid,
+    };
+    return await Util.post("entry.cgi", data: data);
+  }
+
+  /// 容器管理器 - 设为默认注册表
+  static Future<Map> dockerRegistryUsing(String name) async {
+    var data = {
+      "api": "SYNO.Docker.Registry",
+      "method": "using",
+      "version": 1,
+      "name": '"$name"',
+      "_sid": Util.sid,
+    };
+    return await Util.post("entry.cgi", data: data);
+  }
+
   static Future<Map> lastLog(int start, int limit) async {
     var data = {
       "api": 'SYNO.Core.SyslogClient.Status',
