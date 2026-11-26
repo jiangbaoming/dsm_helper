@@ -1,3 +1,34 @@
+# 群晖助手 DSM helper（自用分支）
+
+> 本仓库是上游 [apaipai/dsm_helper](https://gitee.com/apaipai/dsm_helper) 的个人 **自用分支**，仅用于个人自用与学习，**非官方版本**。
+>
+> - **许可证**：沿用上游 **GPLv3**（见 [LICENSE](LICENSE)），二次分发/修改请遵守 GPL。
+> - **上游/原作者**：https://gitee.com/apaipai/dsm_helper （原始功能介绍见文末）。
+
+## 本分支相对上游的改动
+- **容器管理**：兼容新版 Container Manager；新增「项目(Compose)」列表/详情，支持 构建 / 启动 / 停止 / **清除(clean，保留项目与镜像)** / **删除(delete)**、compose 在线编辑、注册表管理、容器日志（全量倒序、进入即每 5s 自动刷新、按本地时区显示）。
+- **文件**：无扩展名或未知格式的文件支持「以文本打开」（内置只读查看器）。
+- **视频 / 日志 / 时区**：多处兼容性与显示修复。
+- **精简**：移除广告相关（穿山甲 pangle SDK 及 VIP/打赏页面），仅保留自用功能。
+
+## 构建方式（Android）
+- 环境：Flutter **3.7.12**（Dart 2.19，非空安全）、JDK **11**、Android SDK **android-33**、Gradle Wrapper **7.3**、AGP **4.1.0**。
+- 若本机访问 GitHub 不通，flutter 命令需加 `--no-version-check`（否则会卡在 git fetch）：
+
+```bash
+flutter --no-version-check pub get
+flutter --no-version-check build apk --debug
+```
+
+- 依赖：`wave` 已钉在 **0.2.2**（0.2.3 起移除 `lib/config.dart` 会编译失败），请保持。
+- 签名：仓库**不含**签名库；本地构建请自备 `android/key.properties` + keystore（自用可直接用自建临时 debug keystore）。
+- iOS 大文件：`fplayer/ios/Frameworks/IJKMediaPlayer.framework` 使用 **Git LFS** 管理，克隆前请先 `git lfs install`。
+
+## 免责声明
+仅供个人自用/研究，按「现状」提供、不保证稳定性与可用性，请勿用于商业分发。上游版权归原作者所有。
+
+---
+
 # 群晖助手 DSM helper
 
 适用于群晖DSM的手机版本。采用新拟态设计风格。
@@ -38,9 +69,6 @@
 
 ⑤群：112751763
 
-# 软件下载
-安卓：https://gitee.com/apaipai/dsm_helper/releases  
-iOS：AppStore搜索：派派助手
 
 # 开发环境
 Flutter 3.7.12
